@@ -467,7 +467,7 @@ func (s3a *S3ApiServer) prepareMultipartCompletionState(r *http.Request, input *
 			}
 
 			partStartChunk := len(finalParts)
-			partETag := filer.ETag(entry)
+			partETag := multipartPartETag(entry)
 
 			for _, chunk := range entry.GetChunks() {
 				finalChunk, chunkErr := completedMultipartChunk(chunk, offset, sses3Info)
@@ -1007,7 +1007,7 @@ func (s3a *S3ApiServer) listObjectParts(input *s3.ListPartsInput) (output *ListP
 				glog.Errorf("listObjectParts %s %s parse %s: %v", *input.Bucket, *input.UploadId, entry.Name, err)
 				continue
 			}
-			partETag := filer.ETag(entry)
+			partETag := multipartPartETag(entry)
 			part := &s3.Part{
 				PartNumber:   aws.Int64(int64(partNumber)),
 				LastModified: aws.Time(time.Unix(entry.Attributes.Mtime, 0).UTC()),
@@ -1218,6 +1218,26 @@ func sortEntriesByLatestChunk(entries []*filer_pb.Entry) {
 		}
 		return cmp.Compare(bTs, aTs)
 	})
+}
+
+// multipartPartETag returns the unquoted S3 ETag for an uploaded MPU part.
+// It intentionally prefers the persisted ExtETagKey written by PutObjectPart
+// over recalculating from FileChunk.ETag values, because a single S3 part can
+// be split into multiple SeaweedFS chunks whose composite chunk ETag differs
+// from the client-visible S3 part ETag.
+func multipartPartETag(entry *filer_pb.Entry) string {
+	if entry == nil {
+		return ""
+	}
+	if entry.Extended != nil {
+		if etagBytes, ok := entry.Extended[s3_constants.ExtETagKey]; ok {
+			etag := strings.Trim(strings.TrimSpace(string(etagBytes)), "\"")
+			if etag != "" {
+				return etag
+			}
+		}
+	}
+	return strings.Trim(filer.ETag(entry), "\"")
 }
 
 func calculateMultipartETag(partEntries map[int][]*filer_pb.Entry, completedPartNumbers []int) string {
