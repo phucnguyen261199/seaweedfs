@@ -444,7 +444,7 @@ func cloneProtoEntry(entry *filer_pb.Entry) *filer_pb.Entry {
 	return proto.Clone(entry).(*filer_pb.Entry)
 }
 
-func copyEntryETag(fullPath util.FullPath, entry *filer_pb.Entry) string {
+func copyEntryETag(entry *filer_pb.Entry) string {
 	if entry != nil && entry.Extended != nil {
 		if etag, ok := entry.Extended[s3_constants.ExtETagKey]; ok && len(etag) > 0 {
 			return string(etag)
@@ -453,18 +453,12 @@ func copyEntryETag(fullPath util.FullPath, entry *filer_pb.Entry) string {
 	attr := filer.Attr{}
 	if entry.Attributes != nil {
 		attr = filer.Attr{
-			FileSize: entry.Attributes.FileSize,
-			Mtime:    time.Unix(entry.Attributes.Mtime, 0),
-			Crtime:   time.Unix(entry.Attributes.Crtime, 0),
-			Mime:     entry.Attributes.Mime,
-			Md5:      entry.Attributes.Md5,
+			Md5:  	entry.Attributes.Md5,
 		}
 	}
 	return filer.ETagEntry(&filer.Entry{
-		FullPath: fullPath,
 		Attr:     attr,
 		Chunks:   entry.Chunks,
-		Content:  entry.Content,
 		Remote:   entry.RemoteEntry,
 	})
 }
@@ -494,7 +488,7 @@ func (s3a *S3ApiServer) finalizeCopyDestination(dstBucket, dstObject, dstVersion
 		dstEntry.Extended = make(map[string][]byte)
 	}
 
-	etag = copyEntryETag(dstPath, dstEntry)
+	etag = copyEntryETag(dstEntry)
 
 	switch dstVersioningState {
 	case s3_constants.VersioningEnabled:
